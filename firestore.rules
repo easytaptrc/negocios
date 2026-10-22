@@ -1,0 +1,62 @@
+rules_version = '2';
+
+// Reglas de seguridad del portal de negocios.
+// - Solo usuarios con perfil activo en /users pueden leer datos.
+// - Solo administradores pueden crear/editar negocios, usuarios y la organización.
+// - Cada usuario ve únicamente los negocios que tiene asignados.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function userPath(uid) { return /databases/$(database)/documents/users/$(uid); }
+    function me() { return get(userPath(request.auth.uid)).data; }
+    function active() { return signedIn() && exists(userPath(request.auth.uid)) && me().get('active', true) == true; }
+    function isAdmin() { return active() && me().role == 'admin'; }
+    function canSee(bizId) {
+      return isAdmin() || (active() && (me().get('allBusinesses', false) == true || bizId in me().get('businesses', [])));
+    }
+
+    // Marca de configuración inicial: se crea una sola vez junto con el primer administrador.
+    match /meta/setup {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.adminUid == request.auth.uid
+        && getAfter(userPath(request.auth.uid)).data.role == 'admin';
+      allow update, delete: if false;
+    }
+
+    // Nombre y logo de la organización (visible en la pantalla de acceso).
+    match /org/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if isAdmin() || (
+        signedIn() && request.auth.uid == uid
+        && request.resource.data.role == 'admin'
+        && !exists(/databases/$(database)/documents/meta/setup)
+        && getAfter(/databases/$(database)/documents/meta/setup).data.adminUid == uid
+      );
+      allow update: if isAdmin();
+      allow delete: if isAdmin() && request.auth.uid != uid;
+    }
+
+    match /businesses/{bizId} {
+      allow read: if canSee(bizId);
+      allow write: if isAdmin();
+    }
+
+    match /requests/{reqId} {
+      allow read: if isAdmin() || (active() && resource.data.uid == request.auth.uid);
+      allow create: if active()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'pendiente'
+        && request.resource.data.message is string
+        && request.resource.data.message.size() <= 2000
+        && canSee(request.resource.data.businessId);
+      allow update, delete: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "id": "./admin.html",
+  "name": "Grupo Nexus · Administración",
+  "short_name": "Nexus Admin",
+  "description": "Administración de negocios, usuarios y solicitudes.",
+  "start_url": "./admin.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07080a",
+  "theme_color": "#07080a",
+  "lang": "es",
+  "icons": [
+    { "src": "assets/icons/admin-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "assets/icons/admin-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
